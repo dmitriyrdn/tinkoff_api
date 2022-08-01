@@ -354,7 +354,7 @@ function TI_GetLastPrice(ticker='YNDX') {
   }
 }
 
-function TI_GetAccounts(account_number=3) {
+function TI_GetAccounts(account_number=0) {
   const data = tinkoffClientV2._GetAccounts();
   const account = data['accounts'][account_number];
   const accountId = account['id'];
