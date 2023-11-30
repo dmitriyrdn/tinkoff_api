@@ -19,13 +19,38 @@ const MILLIS_PER_DAY = 1000 * 60 * 60 * 24
 *
 **/
 
-function sleep(milliseconds) {
-  const date = Date.now();
-  let currentDate = null;
-  do {
-    currentDate = Date.now();
-  } while (currentDate - date < milliseconds);
+function onOpen() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet()
+  var entries = [{
+    name : "Обновить",
+    functionName : "refresh"
+  }]
+  sheet.addMenu("TI", entries)
+};
+
+function _convertRangeToOneCell(range){
+  if (range == null) return;
+  if (range.getA1Notation == undefined) return;   // range should be the instance of Range
+  return range.getCell(1, 1);
 }
+
+function refresh() {
+  const updateDateRange = _convertRangeToOneCell(SpreadsheetApp.getActiveSpreadsheet().getRangeByName('UPDATE_DATE'));
+  if (updateDateRange != null) {
+    updateDateRange.setValue(new Date());
+  } else {
+    SpreadsheetApp.getUi().ui.alert('You should specify the named range "UPDATE_DATE" for using this function.');
+  }
+}
+
+function isoToDate(dateStr){
+  // How to format date string so that google scripts recognizes it?
+  // https://stackoverflow.com/a/17253060
+  const str = dateStr.replace(/-/,'/').replace(/-/,'/').replace(/T/,' ').replace(/\+/,' \+').replace(/Z/,' +00')
+  return new Date(str)
+}
+
+
 class _TinkoffClientV2 {
   constructor(token){
     this.token = token
@@ -34,7 +59,6 @@ class _TinkoffClientV2 {
     //Logger.log(`[_TinkoffClientV2.constructor]`)
   }
   _makeApiCall(methodUrl,data){
-    //sleep(400)
     const url = this.baseUrl + methodUrl
     //Logger.log(`[Tinkoff OpenAPI V2 Call] ${url}`)
     const params = {
@@ -50,7 +74,7 @@ class _TinkoffClientV2 {
     const responseCode = response.getResponseCode()
     if (responseCode == 200) {
       return JSON.parse(response.getContentText())
-    } else if (responseCode == 429) { // На случай если API вернет ошибку 429
+    } else if (responseCode == 429) { 
       Logger.log('Response 429: Too much requests')
     }
   }
@@ -143,15 +167,15 @@ function getInstrumentByFigi(figi="BBG004730JJ5") {
   const request = tinkoffClientV2._GetInstrumentBy("INSTRUMENT_ID_TYPE_FIGI","",figi)
 
   //Logger.log(request)
-  const instrument = request.instrument
+  let instrument = request.instrument
   return instrument
 }
 
 
 //Работаю над поиском по тикеру Ну вроде работает
 
-function getFigiByTicker(ticker="HHRU") {
-  const results=''
+function getFigiByTicker(ticker="ALRS") {
+  let results=''
   while (results=='') {
     //Logger.log(ticker)
     let instrument = tinkoffClientV2._FindInstrument(ticker)
@@ -173,12 +197,13 @@ function getFigiByTicker(ticker="HHRU") {
   }
 }
 
-function getLastPrice(ticker="HHRU") {
+function getLastPrice(ticker="ALRS") {
   const figi = getFigiByTicker(ticker)
   if (figi) {
     const data = tinkoffClientV2._GetLastPrices([figi])
     price = Number(data.lastPrices[0].price.units) + data.lastPrices[0].price.nano/1000000000 
-    //Logger.log(price)
+    //price = data.lastPrices
+    Logger.log(price)
     return price
   }
 }
@@ -229,7 +254,7 @@ function getPortfolio(account_number=0) {
     let instrumentType = portfolio.positions[i].instrumentType
     let units = Number(portfolio.positions[i].quantity.units) + portfolio.positions[i].quantity.nano/1000000000
     let currentPrice = Number(portfolio.positions[i].currentPrice.units) + portfolio.positions[i].currentPrice.nano/1000000000
-    let yyield = Number(portfolio.positions[i].currentNkd.units) + portfolio.positions[i].currentNkd.nano/1000000000;
+    let yyield = 1 //Number(portfolio.positions[i].currentNkd.units) + portfolio.positions[i].currentNkd.nano/1000000000;
     let total = Math.round((units*currentPrice) * 100) / 100;
     let currency = portfolio.positions[i].currentPrice.currency;
     let totalRub = /*total //exchangeRate(currency)*/ total * exchangeRate(currency);
